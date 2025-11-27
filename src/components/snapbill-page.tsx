@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { Camera, UploadCloud, X, ZoomIn, Wallet } from "lucide-react";
+import { Camera, UploadCloud, X, ZoomIn, Wallet, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { extractReceiptInfo, ExtractReceiptInfoOutput } from "@/ai/flows/extract-receipt-info";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
 
 export default function SnapBillPage() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -98,10 +100,15 @@ export default function SnapBillPage() {
       fileInputRef.current.value = "";
     }
   };
+  
+  const formatCurrency = (amount?: number) => {
+    if (amount === undefined) return 'N/A';
+    return `$${amount.toFixed(2)}`;
+  }
 
   return (
     <main className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4 sm:p-6 md:p-8">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-primary font-headline">
             SnapBill
@@ -231,20 +238,56 @@ export default function SnapBillPage() {
             </CardHeader>
             <CardContent>
               {isProcessing ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-8 w-1/3" />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-1/4" />
+                    <Skeleton className="h-8 w-1/2" />
+                  </div>
+                   <Separator />
+                  <div className="space-y-2">
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-6 w-5/6" />
+                  </div>
                 </div>
-              ) : receiptInfo?.isReceipt && receiptInfo.total !== undefined ? (
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Amount</p>
-                  <p className="text-2xl font-bold text-primary">
-                    ${receiptInfo.total.toFixed(2)}
-                  </p>
-                </div>
+              ) : receiptInfo?.isReceipt ? (
+                <>
+                  {(receiptInfo.items && receiptInfo.items.length > 0) ? (
+                    <div className="space-y-4">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[80px]">Qty.</TableHead>
+                            <TableHead>Item</TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {receiptInfo.items.map((item, index) => (
+                            <TableRow key={index}>
+                              <TableCell>{item.quantity || '-'}</TableCell>
+                              <TableCell className="font-medium">{item.description}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(item.amount)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      <Separator />
+                       <div className="flex justify-between items-center font-bold text-lg">
+                        <span className="text-primary">Total</span>
+                        <span className="text-primary">{formatCurrency(receiptInfo.total)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                     <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Total Amount</span>
+                        <span className="text-2xl font-bold text-primary">{formatCurrency(receiptInfo.total)}</span>
+                      </div>
+                  )}
+                </>
               ) : (
-                <p className="text-muted-foreground">
-                  This does not appear to be a receipt, or the total could not be determined.
+                <p className="text-muted-foreground text-center py-4">
+                  This does not appear to be a receipt, or the details could not be determined.
                 </p>
               )}
             </CardContent>
