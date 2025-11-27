@@ -1,0 +1,23 @@
+# Dependencias de desarrollo
+node_modules
+
+# Archivos de build de Next.js
+.next
+
+# Archivos locales de Docker
+Dockerfile
+.dockerignore
+
+# Archivos de configuración y logs
+*.log
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Cache de herramientas
+.npm
+.pnpm-store
+
+# Otros
+README.md
