@@ -347,7 +347,7 @@ export default function SnapBillPage() {
           </Card>
         )}
 
-        {selectedItems.length > 0 && (
+        {selectedItems.length > 0 && receiptInfo?.items && (
            <Card className="mt-6 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -355,9 +355,31 @@ export default function SnapBillPage() {
                 My Expenses
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+               <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[80px]">Qty.</TableHead>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedItems.map((index) => {
+                    const item = receiptInfo.items![index];
+                    return (
+                      <TableRow key={`selected-${index}`}>
+                        <TableCell>{item.quantity || '-'}</TableCell>
+                        <TableCell className="font-medium">{item.description}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(item.amount)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <Separator />
               <div className="flex justify-between items-center font-bold text-lg">
-                <span className="text-accent">My Total</span>
+                <span className="text-accent flex items-center gap-2"><User/>My Total</span>
                 <span className="text-accent">{formatCurrency(personalTotal)}</span>
               </div>
             </CardContent>
