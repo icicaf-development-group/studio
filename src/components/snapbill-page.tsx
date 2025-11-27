@@ -61,67 +61,73 @@ export default function SnapBillPage() {
     setError(null);
     setUnselectedItems([]);
     setMyItems([]);
+    setIsUploading(false);
+    setIsProcessing(false);
+    setProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
     resetState();
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-      if (!file.type.startsWith("image/")) {
-        setError("Please select an image file.");
-        toast({
-          variant: "destructive",
-          title: "Invalid File Type",
-          description: "Please select a valid image file.",
-        });
-        return;
-      }
 
-      setIsUploading(true);
-      setProgress(10);
-      
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUri = reader.result as string;
-
-        setProgress(100);
-        setTimeout(() => {
-          setImagePreviewUrl(dataUri);
-          setIsUploading(false);
-          setIsProcessing(true);
-          extractReceiptInfo({ photoDataUri: dataUri })
-            .then(info => {
-              setReceiptInfo(info);
-              if (info.isReceipt) {
-                const itemsWithId = (info.items || []).map((item, index) => ({...item, id: index}));
-                setUnselectedItems(itemsWithId);
-              } else {
-                 toast({
-                  variant: "destructive",
-                  title: "Analysis Failed",
-                  description: "This does not appear to be a receipt.",
-                });
-              }
-            })
-            .catch(err => {
-              console.error(err);
-              setError("Could not analyze receipt. Please try again.");
-               toast({
-                  variant: "destructive",
-                  title: "Analysis Error",
-                  description: "Could not analyze the receipt. Please try again.",
-                });
-            })
-            .finally(() => {
-              setIsProcessing(false);
-            });
-        }, 500);
-      };
-      reader.readAsDataURL(file);
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file.");
+      toast({
+        variant: "destructive",
+        title: "Invalid File Type",
+        description: "Please select a valid image file.",
+      });
+      return;
     }
+    
+    setIsUploading(true);
+    setProgress(10);
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUri = reader.result as string;
+      
+      setProgress(100);
+      setTimeout(() => {
+        setImagePreviewUrl(dataUri);
+        setIsUploading(false);
+        setIsProcessing(true);
+
+        extractReceiptInfo({ photoDataUri: dataUri })
+          .then(info => {
+            if (info.isReceipt) {
+              setReceiptInfo(info);
+              const itemsWithId = (info.items || []).map((item, index) => ({...item, id: index}));
+              setUnselectedItems(itemsWithId);
+            } else {
+               toast({
+                variant: "destructive",
+                title: "Analysis Failed",
+                description: "This does not appear to be a receipt.",
+              });
+              setReceiptInfo(null);
+            }
+          })
+          .catch(err => {
+            console.error(err);
+            setError("Could not analyze receipt. Please try again.");
+             toast({
+                variant: "destructive",
+                title: "Analysis Error",
+                description: "Could not analyze the receipt. Please try again.",
+              });
+          })
+          .finally(() => {
+            setIsProcessing(false);
+          });
+      }, 500);
+    };
+    reader.readAsDataURL(file);
   };
 
   const triggerFileSelect = () => fileInputRef.current?.click();
