@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { Camera, UploadCloud, X, ZoomIn } from "lucide-react";
+import { Camera, UploadCloud, X, ZoomIn, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,6 +14,8 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { extractReceiptInfo, ExtractReceiptInfoOutput } from "@/ai/flows/extract-receipt-info";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SnapBillPage() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -21,6 +23,9 @@ export default function SnapBillPage() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [receiptInfo, setReceiptInfo] = useState<ExtractReceiptInfoOutput | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -36,6 +41,7 @@ export default function SnapBillPage() {
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
+    setReceiptInfo(null);
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
       if (!file.type.startsWith("image/")) {
@@ -49,11 +55,24 @@ export default function SnapBillPage() {
 
       setTimeout(() => {
         const reader = new FileReader();
-        reader.onloadend = () => {
+        reader.onloadend = async () => {
           setProgress(100);
+          const dataUri = reader.result as string;
           setTimeout(() => {
-            setImagePreviewUrl(reader.result as string);
+            setImagePreviewUrl(dataUri);
             setIsUploading(false);
+            setIsProcessing(true);
+            extractReceiptInfo({ photoDataUri: dataUri })
+              .then(info => {
+                setReceiptInfo(info);
+              })
+              .catch(err => {
+                console.error(err);
+                setError("Could not analyze receipt. Please try again.");
+              })
+              .finally(() => {
+                setIsProcessing(false);
+              });
           }, 500);
         };
         reader.readAsDataURL(file);
@@ -65,6 +84,7 @@ export default function SnapBillPage() {
 
   const handleRetake = () => {
     setImagePreviewUrl(null);
+    setReceiptInfo(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -73,6 +93,7 @@ export default function SnapBillPage() {
 
   const handleRemove = () => {
     setImagePreviewUrl(null);
+    setReceiptInfo(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -179,18 +200,18 @@ export default function SnapBillPage() {
                 <Button
                   className="w-full"
                   onClick={triggerFileSelect}
-                  disabled={isUploading}
+                  disabled={isUploading || isProcessing}
                 >
                   <Camera className="mr-2 h-4 w-4" />
-                  {isUploading ? "Processing..." : "Take Photo"}
+                  {isUploading ? "Uploading..." : isProcessing ? "Analyzing..." : "Take Photo"}
                 </Button>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
-                  <Button onClick={handleRetake} variant="outline">
+                  <Button onClick={handleRetake} variant="outline" disabled={isProcessing}>
                     <Camera className="mr-2 h-4 w-4" />
                     Retake
                   </Button>
-                  <Button onClick={handleRemove} variant="destructive">
+                  <Button onClick={handleRemove} variant="destructive" disabled={isProcessing}>
                     <X className="mr-2 h-4 w-4" />
                     Remove
                   </Button>
@@ -199,6 +220,36 @@ export default function SnapBillPage() {
             </div>
           </CardContent>
         </Card>
+
+        {(isProcessing || receiptInfo) && (
+          <Card className="mt-6 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wallet className="text-primary" />
+                Receipt Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isProcessing ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-8 w-1/3" />
+                </div>
+              ) : receiptInfo?.isReceipt && receiptInfo.total !== undefined ? (
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Amount</p>
+                  <p className="text-2xl font-bold text-primary">
+                    ${receiptInfo.total.toFixed(2)}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">
+                  This does not appear to be a receipt, or the total could not be determined.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </main>
   );
