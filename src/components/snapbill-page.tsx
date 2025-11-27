@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
+type LineItemWithId = NonNullable<ExtractReceiptInfoOutput['items']>[0] & { id: number };
 
 export default function SnapBillPage() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -30,10 +31,12 @@ export default function SnapBillPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [receiptInfo, setReceiptInfo] = useState<ExtractReceiptInfoOutput | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+  
+  const [unselectedItems, setUnselectedItems] = useState<LineItemWithId[]>([]);
+  const [myItems, setMyItems] = useState<LineItemWithId[]>([]);
   const [personalTotal, setPersonalTotal] = useState<number>(0);
+  
   const { toast } = useToast();
-
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -46,22 +49,25 @@ export default function SnapBillPage() {
       clearInterval(timer);
     };
   }, [isUploading]);
-
+  
   useEffect(() => {
-    if (receiptInfo?.items) {
-      const total = selectedItems.reduce((sum, index) => {
-        const item = receiptInfo.items?.[index];
-        return sum + (item?.amount || 0);
-      }, 0);
-      setPersonalTotal(total);
-    }
-  }, [selectedItems, receiptInfo]);
+    const total = myItems.reduce((sum, item) => sum + (item?.amount || 0), 0);
+    setPersonalTotal(total);
+  }, [myItems]);
 
+  const resetState = () => {
+    setImagePreviewUrl(null);
+    setReceiptInfo(null);
+    setError(null);
+    setUnselectedItems([]);
+    setMyItems([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setError(null);
-    setReceiptInfo(null);
-    setSelectedItems([]);
+    resetState();
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
       if (!file.type.startsWith("image/")) {
@@ -74,7 +80,6 @@ export default function SnapBillPage() {
         return;
       }
 
-      setImagePreviewUrl(null);
       setIsUploading(true);
       setProgress(10);
 
@@ -90,7 +95,10 @@ export default function SnapBillPage() {
             extractReceiptInfo({ photoDataUri: dataUri })
               .then(info => {
                 setReceiptInfo(info);
-                if (!info.isReceipt) {
+                if (info.isReceipt) {
+                  const itemsWithId = (info.items || []).map((item, index) => ({...item, id: index}));
+                  setUnselectedItems(itemsWithId);
+                } else {
                    toast({
                     variant: "destructive",
                     title: "Analysis Failed",
@@ -120,30 +128,22 @@ export default function SnapBillPage() {
   const triggerFileSelect = () => fileInputRef.current?.click();
 
   const handleRetake = () => {
-    setImagePreviewUrl(null);
-    setReceiptInfo(null);
-    setSelectedItems([]);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    resetState();
     triggerFileSelect();
   };
 
   const handleRemove = () => {
-    setImagePreviewUrl(null);
-    setReceiptInfo(null);
-    setSelectedItems([]);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    resetState();
   };
   
-  const handleItemSelection = (index: number) => {
-    setSelectedItems(prev => 
-      prev.includes(index) 
-        ? prev.filter(i => i !== index)
-        : [...prev, index]
-    );
+  const handleSelectItem = (itemToSelect: LineItemWithId) => {
+    setMyItems(prev => [...prev, itemToSelect].sort((a,b) => a.id - b.id));
+    setUnselectedItems(prev => prev.filter(item => item.id !== itemToSelect.id));
+  };
+
+  const handleDeselectItem = (itemToDeselect: LineItemWithId) => {
+    setUnselectedItems(prev => [...prev, itemToDeselect].sort((a,b) => a.id - b.id));
+    setMyItems(prev => prev.filter(item => item.id !== itemToDeselect.id));
   };
   
   const formatCurrency = (amount?: number) => {
@@ -297,7 +297,7 @@ export default function SnapBillPage() {
                 </div>
               ) : receiptInfo?.isReceipt ? (
                 <>
-                  {(receiptInfo.items && receiptInfo.items.length > 0) ? (
+                  {(unselectedItems.length > 0) ? (
                     <div className="space-y-4">
                       <Table>
                         <TableHeader>
@@ -309,13 +309,13 @@ export default function SnapBillPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {receiptInfo.items.map((item, index) => (
-                            <TableRow key={index}>
+                          {unselectedItems.map((item) => (
+                            <TableRow key={item.id}>
                               <TableCell>
                                 <Checkbox 
-                                  id={`item-${index}`}
-                                  onCheckedChange={() => handleItemSelection(index)}
-                                  checked={selectedItems.includes(index)}
+                                  id={`item-${item.id}`}
+                                  onCheckedChange={() => handleSelectItem(item)}
+                                  checked={false}
                                 />
                               </TableCell>
                               <TableCell>{item.quantity || '-'}</TableCell>
@@ -325,18 +325,22 @@ export default function SnapBillPage() {
                           ))}
                         </TableBody>
                       </Table>
-                      <Separator />
-                       <div className="flex justify-between items-center font-bold text-lg">
-                        <span className="text-primary flex items-center gap-2"><Wallet/>Total</span>
-                        <span className="text-primary">{formatCurrency(receiptInfo.total)}</span>
-                      </div>
                     </div>
-                  ) : (
+                  ) : myItems.length === 0 ? (
                      <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Total Amount</span>
                         <span className="text-2xl font-bold text-primary">{formatCurrency(receiptInfo.total)}</span>
                       </div>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4">
+                      All items have been assigned.
+                    </p>
                   )}
+                  <Separator className="my-4"/>
+                  <div className="flex justify-between items-center font-bold text-lg">
+                    <span className="text-primary flex items-center gap-2"><Wallet/>Total</span>
+                    <span className="text-primary">{formatCurrency(receiptInfo.total)}</span>
+                  </div>
                 </>
               ) : (
                 <p className="text-muted-foreground text-center py-4">
@@ -347,7 +351,7 @@ export default function SnapBillPage() {
           </Card>
         )}
 
-        {selectedItems.length > 0 && receiptInfo?.items && (
+        {myItems.length > 0 && (
            <Card className="mt-6 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -359,22 +363,28 @@ export default function SnapBillPage() {
                <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]"></TableHead>
                     <TableHead className="w-[80px]">Qty.</TableHead>
                     <TableHead>Item</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedItems.map((index) => {
-                    const item = receiptInfo.items![index];
-                    return (
-                      <TableRow key={`selected-${index}`}>
+                  {myItems.map((item) => (
+                      <TableRow key={`selected-${item.id}`}>
+                        <TableCell>
+                           <Checkbox 
+                            id={`my-item-${item.id}`}
+                            onCheckedChange={() => handleDeselectItem(item)}
+                            checked={true}
+                          />
+                        </TableCell>
                         <TableCell>{item.quantity || '-'}</TableCell>
                         <TableCell className="font-medium">{item.description}</TableCell>
                         <TableCell className="text-right">{formatCurrency(item.amount)}</TableCell>
                       </TableRow>
-                    );
-                  })}
+                    )
+                  )}
                 </TableBody>
               </Table>
               <Separator />
