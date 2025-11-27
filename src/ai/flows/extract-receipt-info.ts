@@ -22,9 +22,9 @@ export type ExtractReceiptInfoInput = z.infer<
 >;
 
 const LineItemSchema = z.object({
-  quantity: z.number().optional().describe('The quantity of the item.'),
+  quantity: z.number().optional().describe('The quantity of the item. This should always be 1, as you will unroll multi-quantity items.'),
   description: z.string().describe('The description or name of the item.'),
-  amount: z.number().describe('The price of the line item.'),
+  amount: z.number().describe('The price of a single item.'),
 });
 
 const ExtractReceiptInfoOutputSchema = z.object({
@@ -48,8 +48,10 @@ const prompt = ai.definePrompt({
   input: {schema: ExtractReceiptInfoInputSchema},
   output: {schema: ExtractReceiptInfoOutputSchema},
   prompt: `You are an expert receipt scanner. Analyze the provided image to determine if it is a receipt.
-If it is a receipt, extract the line items, including their quantity (if available), description, and price. Also extract the total amount.
-The total is usually labeled as "Total", "TOTAL", or is the largest number at the bottom of the receipt.
+If it is a receipt, extract the line items. IMPORTANT: If a line item has a quantity greater than 1, you must "unroll" it into multiple individual items.
+For example, if you see '2 Water Bottles' for a total of '$3.00', you must output two separate items: one for 'Water Bottle' with quantity 1 and amount 1.50, and another for 'Water Bottle' with quantity 1 and amount 1.50.
+The quantity for every item in the output should always be 1.
+Also extract the total amount of the entire receipt. The total is usually labeled as "Total", "TOTAL", or is the largest number at the bottom of the receipt.
 If it is not a receipt or you cannot determine the required information, indicate that. Respond with the extracted information.
 
 Photo: {{media url=photoDataUri}}`,
