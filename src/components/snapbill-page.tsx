@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { Camera, UploadCloud, X, ZoomIn, Wallet, List } from "lucide-react";
+import { Camera, UploadCloud, X, ZoomIn, Wallet, User, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,6 +18,9 @@ import { extractReceiptInfo, ExtractReceiptInfoOutput } from "@/ai/flows/extract
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
+
 
 export default function SnapBillPage() {
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -27,6 +30,9 @@ export default function SnapBillPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [receiptInfo, setReceiptInfo] = useState<ExtractReceiptInfoOutput | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<number[]>([]);
+  const [personalTotal, setPersonalTotal] = useState<number>(0);
+  const { toast } = useToast();
 
 
   useEffect(() => {
@@ -41,13 +47,30 @@ export default function SnapBillPage() {
     };
   }, [isUploading]);
 
+  useEffect(() => {
+    if (receiptInfo?.items) {
+      const total = selectedItems.reduce((sum, index) => {
+        const item = receiptInfo.items?.[index];
+        return sum + (item?.amount || 0);
+      }, 0);
+      setPersonalTotal(total);
+    }
+  }, [selectedItems, receiptInfo]);
+
+
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
     setReceiptInfo(null);
+    setSelectedItems([]);
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
       if (!file.type.startsWith("image/")) {
         setError("Please select an image file.");
+        toast({
+          variant: "destructive",
+          title: "Invalid File Type",
+          description: "Please select a valid image file.",
+        });
         return;
       }
 
@@ -67,10 +90,22 @@ export default function SnapBillPage() {
             extractReceiptInfo({ photoDataUri: dataUri })
               .then(info => {
                 setReceiptInfo(info);
+                if (!info.isReceipt) {
+                   toast({
+                    variant: "destructive",
+                    title: "Analysis Failed",
+                    description: "This does not appear to be a receipt.",
+                  });
+                }
               })
               .catch(err => {
                 console.error(err);
                 setError("Could not analyze receipt. Please try again.");
+                 toast({
+                    variant: "destructive",
+                    title: "Analysis Error",
+                    description: "Could not analyze the receipt. Please try again.",
+                  });
               })
               .finally(() => {
                 setIsProcessing(false);
@@ -87,6 +122,7 @@ export default function SnapBillPage() {
   const handleRetake = () => {
     setImagePreviewUrl(null);
     setReceiptInfo(null);
+    setSelectedItems([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -96,9 +132,18 @@ export default function SnapBillPage() {
   const handleRemove = () => {
     setImagePreviewUrl(null);
     setReceiptInfo(null);
+    setSelectedItems([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+  
+  const handleItemSelection = (index: number) => {
+    setSelectedItems(prev => 
+      prev.includes(index) 
+        ? prev.filter(i => i !== index)
+        : [...prev, index]
+    );
   };
   
   const formatCurrency = (amount?: number) => {
@@ -232,8 +277,8 @@ export default function SnapBillPage() {
           <Card className="mt-6 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Wallet className="text-primary" />
-                Receipt Details
+                <List className="text-primary" />
+                Receipt Items
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -257,6 +302,7 @@ export default function SnapBillPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-[50px]"></TableHead>
                             <TableHead className="w-[80px]">Qty.</TableHead>
                             <TableHead>Item</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
@@ -265,6 +311,13 @@ export default function SnapBillPage() {
                         <TableBody>
                           {receiptInfo.items.map((item, index) => (
                             <TableRow key={index}>
+                              <TableCell>
+                                <Checkbox 
+                                  id={`item-${index}`}
+                                  onCheckedChange={() => handleItemSelection(index)}
+                                  checked={selectedItems.includes(index)}
+                                />
+                              </TableCell>
                               <TableCell>{item.quantity || '-'}</TableCell>
                               <TableCell className="font-medium">{item.description}</TableCell>
                               <TableCell className="text-right">{formatCurrency(item.amount)}</TableCell>
@@ -274,7 +327,7 @@ export default function SnapBillPage() {
                       </Table>
                       <Separator />
                        <div className="flex justify-between items-center font-bold text-lg">
-                        <span className="text-primary">Total</span>
+                        <span className="text-primary flex items-center gap-2"><Wallet/>Total</span>
                         <span className="text-primary">{formatCurrency(receiptInfo.total)}</span>
                       </div>
                     </div>
@@ -293,6 +346,24 @@ export default function SnapBillPage() {
             </CardContent>
           </Card>
         )}
+
+        {selectedItems.length > 0 && (
+           <Card className="mt-6 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="text-accent" />
+                My Expenses
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-between items-center font-bold text-lg">
+                <span className="text-accent">My Total</span>
+                <span className="text-accent">{formatCurrency(personalTotal)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
       </div>
     </main>
   );
