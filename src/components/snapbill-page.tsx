@@ -82,46 +82,45 @@ export default function SnapBillPage() {
 
       setIsUploading(true);
       setProgress(10);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUri = reader.result as string;
 
-      setTimeout(() => {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          setProgress(100);
-          const dataUri = reader.result as string;
-          setTimeout(() => {
-            setImagePreviewUrl(dataUri);
-            setIsUploading(false);
-            setIsProcessing(true);
-            extractReceiptInfo({ photoDataUri: dataUri })
-              .then(info => {
-                setReceiptInfo(info);
-                if (info.isReceipt) {
-                  const itemsWithId = (info.items || []).map((item, index) => ({...item, id: index}));
-                  setUnselectedItems(itemsWithId);
-                } else {
-                   toast({
-                    variant: "destructive",
-                    title: "Analysis Failed",
-                    description: "This does not appear to be a receipt.",
-                  });
-                }
-              })
-              .catch(err => {
-                console.error(err);
-                setError("Could not analyze receipt. Please try again.");
+        setProgress(100);
+        setTimeout(() => {
+          setImagePreviewUrl(dataUri);
+          setIsUploading(false);
+          setIsProcessing(true);
+          extractReceiptInfo({ photoDataUri: dataUri })
+            .then(info => {
+              setReceiptInfo(info);
+              if (info.isReceipt) {
+                const itemsWithId = (info.items || []).map((item, index) => ({...item, id: index}));
+                setUnselectedItems(itemsWithId);
+              } else {
                  toast({
-                    variant: "destructive",
-                    title: "Analysis Error",
-                    description: "Could not analyze the receipt. Please try again.",
-                  });
-              })
-              .finally(() => {
-                setIsProcessing(false);
-              });
-          }, 500);
-        };
-        reader.readAsDataURL(file);
-      }, 1500);
+                  variant: "destructive",
+                  title: "Analysis Failed",
+                  description: "This does not appear to be a receipt.",
+                });
+              }
+            })
+            .catch(err => {
+              console.error(err);
+              setError("Could not analyze receipt. Please try again.");
+               toast({
+                  variant: "destructive",
+                  title: "Analysis Error",
+                  description: "Could not analyze the receipt. Please try again.",
+                });
+            })
+            .finally(() => {
+              setIsProcessing(false);
+            });
+        }, 500);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -303,7 +302,7 @@ export default function SnapBillPage() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-[50px]"></TableHead>
-                            <TableHead className="w-[80px]">Qty.</TableHead>
+                            <TableHead>Qty.</TableHead>
                             <TableHead>Item</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
                           </TableRow>
@@ -364,7 +363,7 @@ export default function SnapBillPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[50px]"></TableHead>
-                    <TableHead className="w-[80px]">Qty.</TableHead>
+                    <TableHead>Qty.</TableHead>
                     <TableHead>Item</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                   </TableRow>
